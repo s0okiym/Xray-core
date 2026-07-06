@@ -31,7 +31,12 @@ type Config struct {
 	// Private extension: dest pool. When non-empty, the server picks one dest
 	// per accepted connection (random) for the REALITY fallback target, instead
 	// of the fixed base.dest. The client ignores this field.
-	Dests         []string `protobuf:"bytes,2,rep,name=dests,proto3" json:"dests,omitempty"`
+	Dests []string `protobuf:"bytes,2,rep,name=dests,proto3" json:"dests,omitempty"`
+	// Private extension: handshake padding scheme. When enabled, both sides
+	// exchange a one-time random-length padding right after the REALITY
+	// handshake to blur the first application packet's length signature.
+	// Continuous traffic morphing is left to the VLESS/Vision layer.
+	Padding       *PaddingScheme `protobuf:"bytes,3,opt,name=padding,proto3" json:"padding,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -80,14 +85,86 @@ func (x *Config) GetDests() []string {
 	return nil
 }
 
+func (x *Config) GetPadding() *PaddingScheme {
+	if x != nil {
+		return x.Padding
+	}
+	return nil
+}
+
+type PaddingScheme struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	MinLen        uint32                 `protobuf:"varint,2,opt,name=min_len,json=minLen,proto3" json:"min_len,omitempty"`
+	MaxLen        uint32                 `protobuf:"varint,3,opt,name=max_len,json=maxLen,proto3" json:"max_len,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PaddingScheme) Reset() {
+	*x = PaddingScheme{}
+	mi := &file_transport_internet_xproto_config_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PaddingScheme) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PaddingScheme) ProtoMessage() {}
+
+func (x *PaddingScheme) ProtoReflect() protoreflect.Message {
+	mi := &file_transport_internet_xproto_config_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PaddingScheme.ProtoReflect.Descriptor instead.
+func (*PaddingScheme) Descriptor() ([]byte, []int) {
+	return file_transport_internet_xproto_config_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PaddingScheme) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *PaddingScheme) GetMinLen() uint32 {
+	if x != nil {
+		return x.MinLen
+	}
+	return 0
+}
+
+func (x *PaddingScheme) GetMaxLen() uint32 {
+	if x != nil {
+		return x.MaxLen
+	}
+	return 0
+}
+
 var File_transport_internet_xproto_config_proto protoreflect.FileDescriptor
 
 const file_transport_internet_xproto_config_proto_rawDesc = "" +
 	"\n" +
-	"&transport/internet/xproto/config.proto\x12\x1exray.transport.internet.xproto\x1a'transport/internet/reality/config.proto\"[\n" +
+	"&transport/internet/xproto/config.proto\x12\x1exray.transport.internet.xproto\x1a'transport/internet/reality/config.proto\"\xa4\x01\n" +
 	"\x06Config\x12;\n" +
 	"\x04base\x18\x01 \x01(\v2'.xray.transport.internet.reality.ConfigR\x04base\x12\x14\n" +
-	"\x05dests\x18\x02 \x03(\tR\x05destsB|\n" +
+	"\x05dests\x18\x02 \x03(\tR\x05dests\x12G\n" +
+	"\apadding\x18\x03 \x01(\v2-.xray.transport.internet.xproto.PaddingSchemeR\apadding\"[\n" +
+	"\rPaddingScheme\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x17\n" +
+	"\amin_len\x18\x02 \x01(\rR\x06minLen\x12\x17\n" +
+	"\amax_len\x18\x03 \x01(\rR\x06maxLenB|\n" +
 	"\"com.xray.transport.internet.xprotoP\x01Z3github.com/xtls/xray-core/transport/internet/xproto\xaa\x02\x1eXray.Transport.Internet.Xprotob\x06proto3"
 
 var (
@@ -102,18 +179,20 @@ func file_transport_internet_xproto_config_proto_rawDescGZIP() []byte {
 	return file_transport_internet_xproto_config_proto_rawDescData
 }
 
-var file_transport_internet_xproto_config_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_transport_internet_xproto_config_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_transport_internet_xproto_config_proto_goTypes = []any{
 	(*Config)(nil),         // 0: xray.transport.internet.xproto.Config
-	(*reality.Config)(nil), // 1: xray.transport.internet.reality.Config
+	(*PaddingScheme)(nil),  // 1: xray.transport.internet.xproto.PaddingScheme
+	(*reality.Config)(nil), // 2: xray.transport.internet.reality.Config
 }
 var file_transport_internet_xproto_config_proto_depIdxs = []int32{
-	1, // 0: xray.transport.internet.xproto.Config.base:type_name -> xray.transport.internet.reality.Config
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 0: xray.transport.internet.xproto.Config.base:type_name -> xray.transport.internet.reality.Config
+	1, // 1: xray.transport.internet.xproto.Config.padding:type_name -> xray.transport.internet.xproto.PaddingScheme
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_transport_internet_xproto_config_proto_init() }
@@ -127,7 +206,7 @@ func file_transport_internet_xproto_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_transport_internet_xproto_config_proto_rawDesc), len(file_transport_internet_xproto_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

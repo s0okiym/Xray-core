@@ -1000,12 +1000,20 @@ func (c *REALITYConfig) Build() (proto.Message, error) {
 	return config, nil
 }
 
+// PaddingSchemeConfig is the JSON form of the xproto handshake padding scheme.
+type PaddingSchemeConfig struct {
+	Enabled bool   `json:"enabled"`
+	MinLen  uint32 `json:"minLen"`
+	MaxLen  uint32 `json:"maxLen"`
+}
+
 // XprotoConfig is the JSON config for the xproto transport. It embeds
 // REALITYConfig (so all reality fields work as-is) and adds a dest pool. When
 // dests is non-empty, the server rotates the fallback target per connection.
 type XprotoConfig struct {
 	REALITYConfig
-	Dests []string `json:"dests"`
+	Dests   []string             `json:"dests"`
+	Padding *PaddingSchemeConfig `json:"padding"`
 }
 
 func (c *XprotoConfig) Build() (proto.Message, error) {
@@ -1027,10 +1035,18 @@ func (c *XprotoConfig) Build() (proto.Message, error) {
 	if !ok {
 		return nil, errors.New("xproto: internal: REALITYConfig.Build did not return *reality.Config").AtError()
 	}
-	return &xproto.Config{
+	xc := &xproto.Config{
 		Base:  realityCfg,
 		Dests: c.Dests,
-	}, nil
+	}
+	if c.Padding != nil {
+		xc.Padding = &xproto.PaddingScheme{
+			Enabled: c.Padding.Enabled,
+			MinLen:  c.Padding.MinLen,
+			MaxLen:  c.Padding.MaxLen,
+		}
+	}
+	return xc, nil
 }
 
 type TransportProtocol string

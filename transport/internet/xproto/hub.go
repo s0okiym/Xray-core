@@ -101,6 +101,12 @@ func (v *Listener) keepAccepting() {
 				errors.LogInfo(context.Background(), err.Error())
 				return
 			}
+			if v.config.Padding != nil && v.config.Padding.Enabled {
+				if err := HandshakePadding(conn, false, v.config.Padding); err != nil {
+					errors.LogInfo(context.Background(), "xproto: handshake padding failed: ", err)
+					return
+				}
+			}
 			v.addConn(stat.Connection(conn))
 		}()
 	}

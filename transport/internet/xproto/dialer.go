@@ -28,6 +28,11 @@ func Dial(ctx context.Context, dest net.Destination, streamSettings *internet.Me
 	if conn, err = reality.UClient(conn, config.Base, ctx, dest); err != nil {
 		return nil, err
 	}
+	if config.Padding != nil && config.Padding.Enabled {
+		if err := HandshakePadding(conn, true, config.Padding); err != nil {
+			return nil, err
+		}
+	}
 	return stat.Connection(conn), nil
 }
 

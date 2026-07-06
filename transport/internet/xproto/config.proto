@@ -18,4 +18,16 @@ message Config {
   // per accepted connection (random) for the REALITY fallback target, instead
   // of the fixed base.dest. The client ignores this field.
   repeated string dests = 2;
+
+  // Private extension: handshake padding scheme. When enabled, both sides
+  // exchange a one-time random-length padding right after the REALITY
+  // handshake to blur the first application packet's length signature.
+  // Continuous traffic morphing is left to the VLESS/Vision layer.
+  PaddingScheme padding = 3;
+}
+
+message PaddingScheme {
+  bool enabled = 1;
+  uint32 min_len = 2;
+  uint32 max_len = 3;
 }
