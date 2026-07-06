@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package xray.core.app.dynconfig.command;
+option csharp_namespace = "Xray.Core.App.Dynconfig.Command";
+option go_package = "github.com/xtls/xray-core/app/dynconfig/command";
+option java_package = "com.xray.core.app.dynconfig.command";
+option java_multiple_files = true;
+
+message GetDestPoolRequest {}
+
+message GetDestPoolResponse {
+  repeated string dest_pool = 1;
+}
+
+message SetDestPoolRequest {
+  repeated string dest_pool = 1;
+}
+
+message SetDestPoolResponse {}
+
+service DynConfigService {
+  rpc GetDestPool(GetDestPoolRequest) returns (GetDestPoolResponse) {}
+  rpc SetDestPool(SetDestPoolRequest) returns (SetDestPoolResponse) {}
+}
+
+message Config {}

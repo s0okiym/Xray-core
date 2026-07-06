@@ -9,6 +9,8 @@ import (
 	"github.com/xtls/xray-core/common/dice"
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
+	"github.com/xtls/xray-core/core"
+	"github.com/xtls/xray-core/features/extension"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/reality"
 	"github.com/xtls/xray-core/transport/internet/stat"
@@ -16,10 +18,11 @@ import (
 
 // Listener is an internet.Listener that accepts TCP connections and runs the
 // REALITY server handshake on each, rotating the fallback dest per connection
-// when a dest pool is configured.
+// from a dynamic pool (DynConfig feature) or the static config dests.
 type Listener struct {
 	listener net.Listener
 	config   *Config
+	dyn      extension.DynConfig // may be nil
 	addConn  internet.ConnHandler
 }
 
@@ -33,10 +36,15 @@ func ListenXproto(ctx context.Context, address net.Address, port net.Port, strea
 		return nil, errors.New(`xproto: empty "xprotoSettings" or missing base reality config`).AtError()
 	}
 
-	l := &Listener{
-		addConn: handler,
-		config:  config,
+	l := &Listener{addConn: handler, config: config}
+	// Look up the DynConfig feature (optional). When present, the server rotates
+	// the fallback dest from its dynamic pool instead of the static config.
+	if v := core.FromContext(ctx); v != nil {
+		if f := v.GetFeature(extension.DynConfigType()); f != nil {
+			l.dyn, _ = f.(extension.DynConfig)
+		}
 	}
+
 	listener, err := internet.ListenSystem(ctx, &net.TCPAddr{
 		IP:   address.IP(),
 		Port: int(port),
@@ -51,10 +59,15 @@ func ListenXproto(ctx context.Context, address net.Address, port net.Port, strea
 	return l, nil
 }
 
-// pickDest returns the fallback dest for one accepted connection. When a dest
-// pool is configured, a random entry is chosen; otherwise the fixed base.dest
-// is used. This is the first private extension over plain REALITY.
+// pickDest returns the fallback dest for one accepted connection. Precedence:
+// (1) dynamic pool from the DynConfig feature, (2) static dests pool in config,
+// (3) fixed base.dest.
 func (v *Listener) pickDest() string {
+	if v.dyn != nil {
+		if pool := v.dyn.DestPool(); len(pool) > 0 {
+			return pool[dice.Roll(len(pool))]
+		}
+	}
 	if len(v.config.Dests) > 0 {
 		return v.config.Dests[dice.Roll(len(v.config.Dests))]
 	}

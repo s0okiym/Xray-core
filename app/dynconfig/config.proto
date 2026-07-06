@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package xray.core.app.dynconfig;
+option csharp_namespace = "Xray.App.Dynconfig";
+option go_package = "github.com/xtls/xray-core/app/dynconfig";
+option java_package = "com.xray.app.dynconfig";
+option java_multiple_files = true;
+
+// Config is the configuration for the DynConfig app. It seeds the initial
+// dynamic parameters; subsequent updates happen at runtime via commander.
+message Config {
+  // Initial dest pool. The xproto server rotates through these for the
+  // REALITY fallback target.
+  repeated string dest_pool = 1;
+}
+
+// DestPoolRequest is the commander request payload to replace the dest pool.
+message DestPoolRequest {
+  repeated string dest_pool = 1;
+}
