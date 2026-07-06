@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package xray.transport.internet.xproto;
+option csharp_namespace = "Xray.Transport.Internet.Xproto";
+option go_package = "github.com/xtls/xray-core/transport/internet/xproto";
+option java_package = "com.xray.transport.internet.xproto";
+option java_multiple_files = true;
+
+import "transport/internet/reality/config.proto";
+
+// Config is the xproto transport configuration. It embeds a REALITY config
+// (so the handshake is REALITY-compatible) and adds a private dest pool
+// extension used by the server to rotate the fallback target per connection.
+message Config {
+  xray.transport.internet.reality.Config base = 1;
+
+  // Private extension: dest pool. When non-empty, the server picks one dest
+  // per accepted connection (random) for the REALITY fallback target, instead
+  // of the fixed base.dest. The client ignores this field.
+  repeated string dests = 2;
+}

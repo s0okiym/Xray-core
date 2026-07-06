@@ -2,28 +2,23 @@
 // REALITY handshake (github.com/xtls/reality) as a standalone transport,
 // rather than a security layer stacked on top of tcp/splithttp/grpc.
 //
-// MVP: it reuses transport/internet/reality's *Config verbatim as its
-// ProtocolSettings, so the handshake is identical to REALITY today. Private
-// extensions (dest pool, key rotation, control stream, shaper) are layered on
-// top in later stages without changing the handshake core.
+// Stage 2: xproto carries its own Config (embedding a REALITY config plus a
+// private dest pool). The handshake core is still REALITY; the dest pool is
+// the first private extension layered on top.
 package xproto
 
-import (
-	"github.com/xtls/xray-core/transport/internet"
-	"github.com/xtls/xray-core/transport/internet/reality"
-)
+import "github.com/xtls/xray-core/transport/internet"
 
 // ProtocolName is the registered transport protocol name.
 const ProtocolName = "xproto"
 
-// ConfigFromStreamSettings extracts the REALITY config that xproto rides on.
-// Unlike REALITY (a security layer kept in SecuritySettings), xproto is an
-// independent transport and keeps its config in the ProtocolSettings slot.
-func ConfigFromStreamSettings(settings *internet.MemoryStreamConfig) *reality.Config {
+// ConfigFromStreamSettings extracts the xproto config from the stream settings'
+// transport (ProtocolSettings) slot.
+func ConfigFromStreamSettings(settings *internet.MemoryStreamConfig) *Config {
 	if settings == nil {
 		return nil
 	}
-	config, ok := settings.ProtocolSettings.(*reality.Config)
+	config, ok := settings.ProtocolSettings.(*Config)
 	if !ok {
 		return nil
 	}

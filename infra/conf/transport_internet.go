@@ -42,6 +42,7 @@ import (
 	"github.com/xtls/xray-core/transport/internet/tcp"
 	"github.com/xtls/xray-core/transport/internet/tls"
 	"github.com/xtls/xray-core/transport/internet/websocket"
+	"github.com/xtls/xray-core/transport/internet/xproto"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -997,6 +998,39 @@ func (c *REALITYConfig) Build() (proto.Message, error) {
 		config.ServerName = c.ServerName
 	}
 	return config, nil
+}
+
+// XprotoConfig is the JSON config for the xproto transport. It embeds
+// REALITYConfig (so all reality fields work as-is) and adds a dest pool. When
+// dests is non-empty, the server rotates the fallback target per connection.
+type XprotoConfig struct {
+	REALITYConfig
+	Dests []string `json:"dests"`
+}
+
+func (c *XprotoConfig) Build() (proto.Message, error) {
+	// If a dest pool is provided without a fixed dest, seed dest with the first
+	// pool entry so the embedded REALITYConfig.Build()'s dest validation passes.
+	// The actual per-connection dest selection happens in the server (hub.go).
+	if c.Dest == nil && len(c.Dests) > 0 {
+		b, err := json.Marshal(c.Dests[0])
+		if err != nil {
+			return nil, errors.New("xproto: invalid dest in dests pool: ", c.Dests[0]).Base(err)
+		}
+		c.Dest = b
+	}
+	base, err := c.REALITYConfig.Build()
+	if err != nil {
+		return nil, errors.New("Failed to build xproto config.").Base(err)
+	}
+	realityCfg, ok := base.(*reality.Config)
+	if !ok {
+		return nil, errors.New("xproto: internal: REALITYConfig.Build did not return *reality.Config").AtError()
+	}
+	return &xproto.Config{
+		Base:  realityCfg,
+		Dests: c.Dests,
+	}, nil
 }
 
 type TransportProtocol string
@@ -2053,7 +2087,7 @@ type StreamConfig struct {
 	WSSettings          *WebSocketConfig   `json:"wsSettings"`
 	HTTPUPGRADESettings *HttpUpgradeConfig `json:"httpupgradeSettings"`
 	HysteriaSettings    *HysteriaConfig    `json:"hysteriaSettings"`
-	XprotoSettings      *REALITYConfig     `json:"xprotoSettings"`
+	XprotoSettings      *XprotoConfig      `json:"xprotoSettings"`
 	SocketSettings      *SocketConfig      `json:"sockopt"`
 }
 
