@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	goreality "github.com/xtls/reality"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/dice"
 	"github.com/xtls/xray-core/common/errors"
@@ -37,6 +38,18 @@ func ListenXproto(ctx context.Context, address net.Address, port net.Port, strea
 	}
 
 	l := &Listener{addConn: handler, config: config}
+	// reality.Server's handshake waits on GlobalPostHandshakeRecordsLens,
+	// populated by DetectPostHandshakeRecordsLens. Start it for each dest in
+	// the pool (or the fixed base.dest), otherwise the handshake hangs.
+	detectionDests := config.Dests
+	if len(detectionDests) == 0 && config.Base.Dest != "" {
+		detectionDests = []string{config.Base.Dest}
+	}
+	for _, dest := range detectionDests {
+		rc := *config.Base
+		rc.Dest = dest
+		go goreality.DetectPostHandshakeRecordsLens(rc.GetREALITYConfig())
+	}
 	// Look up the DynConfig feature (optional). When present, the server rotates
 	// the fallback dest from its dynamic pool instead of the static config.
 	if v := core.FromContext(ctx); v != nil {
