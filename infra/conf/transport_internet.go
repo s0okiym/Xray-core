@@ -1025,6 +1025,8 @@ func (p TransportProtocol) Build() (string, error) {
 		return "", errors.PrintRemovedFeatureError("QUIC transport (without web service, etc.)", "XHTTP stream-one H3")
 	case "hysteria":
 		return "hysteria", nil
+	case "xproto":
+		return "xproto", nil
 	default:
 		return "", errors.New("Config: unknown transport protocol: ", p)
 	}
@@ -2051,6 +2053,7 @@ type StreamConfig struct {
 	WSSettings          *WebSocketConfig   `json:"wsSettings"`
 	HTTPUPGRADESettings *HttpUpgradeConfig `json:"httpupgradeSettings"`
 	HysteriaSettings    *HysteriaConfig    `json:"hysteriaSettings"`
+	XprotoSettings      *REALITYConfig     `json:"xprotoSettings"`
 	SocketSettings      *SocketConfig      `json:"sockopt"`
 }
 
@@ -2179,6 +2182,16 @@ func (c *StreamConfig) Build() (*internet.StreamConfig, error) {
 		config.TransportSettings = append(config.TransportSettings, &internet.TransportConfig{
 			ProtocolName: "hysteria",
 			Settings:     serial.ToTypedMessage(hs),
+		})
+	}
+	if c.XprotoSettings != nil {
+		xs, err := c.XprotoSettings.Build()
+		if err != nil {
+			return nil, errors.New("Failed to build xproto config.").Base(err)
+		}
+		config.TransportSettings = append(config.TransportSettings, &internet.TransportConfig{
+			ProtocolName: "xproto",
+			Settings:     serial.ToTypedMessage(xs),
 		})
 	}
 	if c.SocketSettings != nil {
