@@ -19,6 +19,7 @@ xproto 是一套基于 REALITY 握手机制改造的私有抗审查 transport。
 | **dest 池** | 服务端配置多个 dest 候选,每连接随机选一个(私有化点,避免单 dest 被针对) |
 | **dynconfig 动态参数** | dynconfig app 管理动态 dest_pool,通过 commander gRPC 运行时修改,无需重启 |
 | **握手 padding shaper** | 握手后双向一次性随机长度 padding,打散首个应用包长度特征 |
+| **防重放** | ClientHello SHA256 哈希去重,重放透传 dest(不暴露 REALITY 重写特征) |
 | **免域名/证书** | 借真实 dest 证书,无需自持域名或证书 |
 
 ## 架构
@@ -136,7 +137,7 @@ commander gRPC 接口(运行时修改不重启):
 | `serverNames` | 服务端 | 允许的 SNI 列表 |
 | `privateKey` | 服务端 | X25519 私钥 base64url |
 | `shortIds` | 服务端 | 允许的 shortId 列表(hex) |
-| `maxTimeDiff` | 服务端 | 时间戳容忍(毫秒,0 表示不校验) |
+| `maxTimeDiff` | 服务端 | 时间戳容忍(毫秒,0 表示不校验);防重放 ttl = max(maxTimeDiff, 5min) |
 | `serverName` | 客户端 | SNI |
 | `publicKey` | 客户端 | X25519 公钥 base64url |
 | `shortId` | 客户端 | 单个 shortId(hex) |
@@ -201,6 +202,29 @@ padding 长度在 `[minLen, maxLen]` 区间随机,用于打散首个应用包(VL
 
 > 持续流量整形(类似 anyTLS PaddingScheme 的逐包分片填充)需要会话层 framing,与 xproto 的透明传输设计冲突,因此留给 VLESS/Vision 层处理。xproto 的 shaper 只做握手后一次性 padding。
 
+### 5. 防重放(nonce 去重)
+
+审查者可能抓真客户端的 ClientHello 原样重放给服务端。若走 REALITY 劫持路径,重写的 ServerHello 与真 dest 响应不同,会暴露代理。防重放让重放走透传 dest 路径(响应同真网站):
+
+```mermaid
+flowchart TD
+    A["新连接到达"] --> B["peek ClientHello"]
+    B --> C["SHA256 哈希"]
+    C --> D{"ttl 内见过?"}
+    D -->|"是(重放)"| E["透传 dest"]
+    E --> F["探测者看到真实网站响应"]
+    D -->|"否(新鲜)"| G["记录哈希"]
+    G --> H["走 reality.Server 正常握手"]
+```
+
+**nonce 选择**:整个 ClientHello 字节的 SHA256(含 Random / key_share / SessionId 密文,每次连接都不同),绕开"时间戳秒级 + ShortId 不唯一"的问题。合法连接每次 ClientHello 不同,永不被误拒。
+
+**重放处置 = 透传 dest**(不是关闭连接):关闭本身是异常行为会暴露;透传 dest 的响应和真网站一致。
+
+**ttl** = `max(maxTimeDiff, 5min)`:ttl 内由 replayGuard 拦,ttl 外由 reality 时间校验拦。改 ClientHello 重放 → 哈希不命中放过,但 AEAD AD 变 → 暗号解密失败 → reality 透传(无害)。
+
+**性能**:握手期 SHA256 ~500 字节 + map 查找(微秒级),稳态零开销。
+
 ## 端到端测试
 
 本机起 server + client,验证全链路:
@@ -229,6 +253,7 @@ curl --socks5 127.0.0.1:1080 http://example.com/ -w "HTTP %{http_code}\n"
 | 阶段 3 | dynconfig app(服务端动态 dest_pool + commander) | `3f49fdbe` |
 | 阶段 4 | 握手 padding shaper | `abe10ec8` |
 | 修复 | DetectPostHandshakeRecordsLens(握手卡死修复) | `761be2ef` |
+| P1 | 防重放(ClientHello 哈希去重 + 透传 dest) | `63ae9f58` |
 
 ## 后续扩展
 
