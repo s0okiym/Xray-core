@@ -1,6 +1,7 @@
 package xproto
 
 import (
+	"bufio"
 	"context"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type Listener struct {
 	listener net.Listener
 	config   *Config
 	dyn      extension.DynConfig // may be nil
+	guard    *replayGuard
 	addConn  internet.ConnHandler
 }
 
@@ -37,7 +39,11 @@ func ListenXproto(ctx context.Context, address net.Address, port net.Port, strea
 		return nil, errors.New(`xproto: empty "xprotoSettings" or missing base reality config`).AtError()
 	}
 
-	l := &Listener{addConn: handler, config: config}
+	ttl := time.Duration(config.Base.MaxTimeDiff) * time.Millisecond
+	if ttl < 5*time.Minute {
+		ttl = 5 * time.Minute
+	}
+	l := &Listener{addConn: handler, config: config, guard: newReplayGuard(ttl)}
 	// reality.Server's handshake waits on GlobalPostHandshakeRecordsLens,
 	// populated by DetectPostHandshakeRecordsLens. Start it for each dest in
 	// the pool (or the fixed base.dest), otherwise the handshake hangs.
@@ -103,14 +109,29 @@ func (v *Listener) keepAccepting() {
 		}
 
 		go func() {
+			br := bufio.NewReader(conn)
+			pickedDest := v.pickDest()
+
+			// Replay detection: hash the ClientHello; exact replays are
+			// transparently forwarded to dest so a probe sees a real site,
+			// not a REALITY redirect.
+			if hash, ok := clientHelloHash(br); ok {
+				if !v.guard.allow(hash) {
+					errors.LogInfo(context.Background(), "xproto: replay detected, forwarding to dest ", pickedDest)
+					forwardToDest(&peekConn{Reader: br, Conn: conn}, pickedDest)
+					return
+				}
+			}
+
 			// Shallow-copy the base reality config so we can override Dest per
 			// connection without racing other accept goroutines.
 			rc := *v.config.Base
-			if dest := v.pickDest(); dest != "" {
-				rc.Dest = dest
+			if pickedDest != "" {
+				rc.Dest = pickedDest
 			}
 			gorealityCfg := rc.GetREALITYConfig()
-			if conn, err = reality.Server(conn, gorealityCfg); err != nil {
+			pc := &peekConn{Reader: br, Conn: conn}
+			if conn, err = reality.Server(pc, gorealityCfg); err != nil {
 				errors.LogInfo(context.Background(), err.Error())
 				return
 			}
